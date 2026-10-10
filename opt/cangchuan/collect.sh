@@ -3,7 +3,8 @@
 HS=$(hostname 2>/dev/null || cat /etc/hostname 2>/dev/null || echo unknown)
 OS=$( (. /etc/os-release 2>/dev/null; echo "${PRETTY_NAME:-Linux}") )
 CORES=$(nproc 2>/dev/null || echo 1)
-LA=($(cat /proc/loadavg 2>/dev/null || echo "0 0 0"))
+# shellcheck 建议：不要用未加引号的命令替换直接赋值数组（SC2207）
+read -ra LA <<< "$(cat /proc/loadavg 2>/dev/null || echo '0 0 0')"
 MEM=$(free -m 2>/dev/null | awk 'NR==2{print $2" "$3" "$7}')
 MT=$(echo $MEM | cut -d' ' -f1); MU=$(echo $MEM | cut -d' ' -f2); MA=$(echo $MEM | cut -d' ' -f3)
 DISK=$(df / 2>/dev/null | awk 'NR==2{gsub("%","",$5); print $5}')
