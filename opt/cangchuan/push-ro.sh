@@ -11,7 +11,7 @@
 #     push-ro.sh --once   只跑一轮
 set -u
 . /etc/cangchuan.conf
-INTERVAL="${RO_INTERVAL:-15}"     # 固定 15 秒，不接受任何模式切换
+INTERVAL="${RO_INTERVAL:-30}"     # 默认 30 秒；想更快/更慢在 /etc/cangchuan.conf 里加一行 RO_INTERVAL=秒数
 
 round() {
   J=$(/opt/cangchuan/collect.sh 2>/dev/null)
