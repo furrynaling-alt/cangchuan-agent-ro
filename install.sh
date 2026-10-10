@@ -13,17 +13,17 @@ echo "  curl / python3 OK"
 
 echo "== 2/5 验节点码 =="
 CHK=$(curl -s --max-time 20 -X POST -H "X-Push-Token: $CODE" -d '{}' "$HUB/api/node/check" 2>/dev/null || true)
-case "$CHK" in
-  *'"ok"'*true*)   echo "  节点码有效 ✓" ;;
-  *未登记*|*"ok": false*)
-                   echo "  ❌ 节点码面板不认：$CHK"
-                   echo "     去面板生成一个（相当于这台机器的登录密码）；白名单外的码一律拒收"
-                   exit 1 ;;
-  *)
-                   echo "  ⚠️  连不上面板（$HUB），原始回应：${CHK:-（空）}"
-                   echo "     可能是这台机器没网/DNS 不通/被墙 —— 先继续装，等它上报时面板还会再验一次"
-                   ;;
-esac
+if echo "$CHK" | grep -q 'ok"[[:space:]]*:[[:space:]]*true'; then
+  echo "  节点码有效 ✓"
+elif echo "$CHK" | grep -qE '未登记|ok"[[:space:]]*:[[:space:]]*false'; then
+  echo "  ❌ 节点码面板不认：$CHK"
+  echo "     去面板生成一个（相当于这台机器的登录密码）；白名单外的码一律拒收"
+  exit 1
+else
+  echo "  ⚠️  连不上面板（$HUB），原始回应：${CHK:-（空）}"
+  echo "     可能是这台机器没网/DNS 不通/被墙 —— 先继续装，等它上报时面板还会再验一次"
+fi
+
 
 #!/bin/bash
 # ============================================================
