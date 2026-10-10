@@ -1,0 +1,16 @@
+[Unit]
+Description=棂海苍川 节点上报（只读定制版：固定 15 秒，不接受指令）
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/cangchuan/push-ro.sh
+Restart=always
+RestartSec=10
+MemoryMax=28M
+Nice=10
+# 只读版：它从不调用 /api/agent/poll，所以面板没有任何通道能让它执行东西
+
+[Install]
+WantedBy=multi-user.target
