@@ -1,30 +1,3 @@
-echo "== 1/5 依赖检查（先装依赖 —— 没 curl 的话后面验码会失败，看起来像\"码不认\"）=="
-need=""
-for c in curl python3; do command -v $c >/dev/null 2>&1 || need="$need $c"; done
-if [ -n "$need" ]; then
-  echo "  缺依赖：$need ，尝试安装…"
-  if command -v apt-get >/dev/null 2>&1; then apt-get update -qq && apt-get install -y -qq $need
-  elif command -v apk >/dev/null 2>&1; then apk add --no-cache $need
-  elif command -v dnf >/dev/null 2>&1; then dnf install -y $need
-  elif command -v yum >/dev/null 2>&1; then yum install -y $need
-  else echo "  请自己装：$need"; exit 1; fi
-fi
-echo "  curl / python3 OK"
-
-echo "== 2/5 验节点码 =="
-CHK=$(curl -s --max-time 20 -X POST -H "X-Push-Token: $CODE" -d '{}' "$HUB/api/node/check" 2>/dev/null || true)
-if echo "$CHK" | grep -q 'ok"[[:space:]]*:[[:space:]]*true'; then
-  echo "  节点码有效 ✓"
-elif echo "$CHK" | grep -qE '未登记|ok"[[:space:]]*:[[:space:]]*false'; then
-  echo "  ❌ 节点码面板不认：$CHK"
-  echo "     去面板生成一个（相当于这台机器的登录密码）；白名单外的码一律拒收"
-  exit 1
-else
-  echo "  ⚠️  连不上面板（$HUB），原始回应：${CHK:-（空）}"
-  echo "     可能是这台机器没网/DNS 不通/被墙 —— 先继续装，等它上报时面板还会再验一次"
-fi
-
-
 #!/bin/bash
 # ============================================================
 #  棂海苍川 · 节点上报【只读定制版】一键安装
@@ -34,30 +7,30 @@ fi
 #       | sudo bash -s 你的节点码
 #
 #  ★这个版本只做一件事：每 15 秒采集一次、上报一次。
-#    不轮询指令、不接受任何命令、不被任何模式控制（没有"待机/正常/归家"）。
+#    不轮询指令、不接受任何命令、不被任何模式控制。
 #    面板想指挥它也没有通道 —— 它从不问"有没有指令"。
 #
 #  装完这台机器自动出现在面板上：
-#     名字 = 本机 hostname（想改就改 hostname，或装完在面板上改名）
+#     名字 = 本机 hostname（也可由面板按节点码指定名字/地区）
 #     地区 = 面板按公网 IP 自动判
 # ============================================================
 set -e
-[ "$(id -u)" = "0" ] || { echo "要用 root 跑"; exit 1; }
+[ "$(id -u)" = "0" ] || { echo "要用 root 跑（sudo bash install.sh ...）"; exit 1; }
 
 CODE="${1:-}"
 HUB="${2:-https://panel.naling.net}"
-# 防呆：把占位符当真的贴进来会报 "syntax error near unexpected token newline"
+RAW="https://raw.githubusercontent.com/furrynaling-alt/cangchuan-agent-ro/main"
+
+# ── 防呆：占位符当真的贴进来会报 "syntax error near unexpected token" ──
 case "$CODE" in
-  *"<"*|*">"*|*"节点码"*|abc123xyz|xxx|xxxcode|YOUR_CODE)
+  *"<"*|*">"*|*"节点码"*|abc123xyz|YOUR_CODE|xxx)
     echo "❌ 这不是节点码，看着还是占位符：$CODE"
     echo "   节点码是面板上生成的一串（一台机器一个），整串贴进来、不要带尖括号 <>"
-    echo "   形如：EXAMPLECODE1234567890ABCD（面板给你的那一串，整段贴进来）"
     exit 1;;
 esac
 [ -z "$CODE" ] && { echo "用法：... | sudo bash -s 你的节点码   （去面板生成，不要带 <>）"; exit 1; }
-RAW="https://raw.githubusercontent.com/furrynaling-alt/cangchuan-agent-ro/main"
-[ -z "$CODE" ] && { echo "用法：... | sudo bash -s 你的节点码"; exit 1; }
 
+# 本地有整套包就用本地，没有就从仓库下（支持 curl|bash）
 HERE="$(cd "$(dirname "$0")" 2>/dev/null && pwd || echo /tmp)"
 if [ -f "$HERE/opt/cangchuan/collect.sh" ]; then
   SRC="$HERE"
@@ -71,20 +44,46 @@ else
   done
 fi
 
-echo "== 3/5 部署到 /opt/cangchuan =="
+echo "== 1/6 依赖检查 =="
+awk_need=""
+for c in curl python3; do command -v $c >/dev/null 2>&1 || awk_need="$awk_need $c"; done
+if [ -n "$awk_need" ]; then
+  echo "  缺依赖：$awk_need ，尝试安装…"
+  if command -v apt-get >/dev/null 2>&1; then apt-get update -qq && apt-get install -y -qq $awk_need
+  elif command -v apk >/dev/null 2>&1; then apk add --no-cache $awk_need
+  elif command -v dnf >/dev/null 2>&1; then dnf install -y $awk_need
+  elif command -v yum >/dev/null 2>&1; then yum install -y $awk_need
+  else echo "  请自己装：$awk_need"; exit 1; fi
+fi
+echo "  curl / python3 OK"
+
+echo "== 2/6 验节点码 =="
+CHK=$(curl -s --max-time 20 -X POST -H "X-Push-Token: $CODE" -d '{}' "$HUB/api/node/check" 2>/dev/null || true)
+if echo "$CHK" | grep -q 'ok"[[:space:]]*:[[:space:]]*true'; then
+  echo "  节点码有效 ✓"
+elif echo "$CHK" | grep -qE '未登记|ok"[[:space:]]*:[[:space:]]*false'; then
+  echo "  ❌ 节点码面板不认：$CHK"
+  echo "     去面板生成一个（相当于这台机器的登录密码）；白名单外的码一律拒收"
+  exit 1
+else
+  echo "  ⚠️  连不上面板（$HUB），原始回应：${CHK:-（空）}"
+  echo "     可能是这台机器没网/DNS 不通/被墙 —— 先继续装，等它上报时面板还会再验一次"
+fi
+
+echo "== 3/6 部署到 /opt/cangchuan =="
 mkdir -p /opt/cangchuan
 for f in collect.sh push-ro.sh sec_score.sh; do
   install -m 755 "$SRC/opt/cangchuan/$f" "/opt/cangchuan/$f"
 done
 echo "  3 个脚本已就位（push-ro.sh = 只上报，不接指令）"
 
-echo "== 4/5 写配置 /etc/cangchuan.conf =="
+echo "== 4/6 写配置 /etc/cangchuan.conf =="
 umask 077
 printf 'HUB=%s\nCODE=%s\nMODE=ro\n' "$HUB" "$CODE" > /etc/cangchuan.conf
 chmod 600 /etc/cangchuan.conf
 echo "  面板：$HUB"
 
-echo "== 5/5 装服务（固定 15 秒上报，不接受任何指令）=="
+echo "== 5/6 装服务（固定 15 秒上报，不接受任何指令）=="
 install -m 644 "$SRC/systemd/cangchuan-agent-ro.service" /etc/systemd/system/cangchuan-agent-ro.service
 systemctl daemon-reload
 systemctl disable --now cangchuan-agent.service cangchuan-agent.timer 2>/dev/null >/dev/null || true
@@ -112,7 +111,7 @@ echo
 echo "============================================"
 echo " 装好了（只读版）。这台以【$(hostname)】出现在面板：$HUB"
 echo " 它只会：每 15 秒上报一次数据 —— 收不到、也不会执行任何指令"
-echo " 改名字：hostnamectl set-hostname 新名字（或面板上改）"
+echo " 改名字：面板上按节点码指定（或 hostnamectl set-hostname）"
 echo " 排查：systemctl status cangchuan-agent-ro"
 echo "       /opt/cangchuan/push-ro.sh --once   # 手动跑一次"
 echo "============================================"
