@@ -1,3 +1,30 @@
+echo "== 1/5 依赖检查（先装依赖 —— 没 curl 的话后面验码会失败，看起来像\"码不认\"）=="
+need=""
+for c in curl python3; do command -v $c >/dev/null 2>&1 || need="$need $c"; done
+if [ -n "$need" ]; then
+  echo "  缺依赖：$need ，尝试安装…"
+  if command -v apt-get >/dev/null 2>&1; then apt-get update -qq && apt-get install -y -qq $need
+  elif command -v apk >/dev/null 2>&1; then apk add --no-cache $need
+  elif command -v dnf >/dev/null 2>&1; then dnf install -y $need
+  elif command -v yum >/dev/null 2>&1; then yum install -y $need
+  else echo "  请自己装：$need"; exit 1; fi
+fi
+echo "  curl / python3 OK"
+
+echo "== 2/5 验节点码 =="
+CHK=$(curl -s --max-time 20 -X POST -H "X-Push-Token: $CODE" -d '{}' "$HUB/api/node/check" 2>/dev/null || true)
+case "$CHK" in
+  *'"ok"'*true*)   echo "  节点码有效 ✓" ;;
+  *未登记*|*"ok": false*)
+                   echo "  ❌ 节点码面板不认：$CHK"
+                   echo "     去面板生成一个（相当于这台机器的登录密码）；白名单外的码一律拒收"
+                   exit 1 ;;
+  *)
+                   echo "  ⚠️  连不上面板（$HUB），原始回应：${CHK:-（空）}"
+                   echo "     可能是这台机器没网/DNS 不通/被墙 —— 先继续装，等它上报时面板还会再验一次"
+                   ;;
+esac
+
 #!/bin/bash
 # ============================================================
 #  棂海苍川 · 节点上报【只读定制版】一键安装
@@ -44,51 +71,27 @@ else
   done
 fi
 
-# ── 0/5 先验节点码：不在面板白名单里，直接不装（别人拿随便一串装不上）──
-echo "== 0/5 验节点码 =="
-CHK=$(curl -s --max-time 15 -X POST -H "X-Push-Token: $CODE" -d '{}' "$HUB/api/node/check" 2>/dev/null)
-if echo "$CHK" | grep -qE '"ok"[[:space:]]*:[[:space:]]*true'; then
-  echo "  节点码有效 ✓"
-else
-  echo "  ❌ 这个节点码面板不认：$CHK"
-  echo "     —— 节点码要先去面板生成（相当于这台机器的登录密码），不在白名单里的码一律拒收"
-  exit 1
-fi
-
-echo "== 1/5 依赖检查 =="
-need=""
-for c in curl python3; do command -v $c >/dev/null 2>&1 || need="$need $c"; done
-if [ -n "$need" ]; then
-  echo "  缺依赖：$need ，尝试安装…"
-  if command -v apt-get >/dev/null 2>&1; then apt-get update -qq && apt-get install -y -qq $need
-  elif command -v apk >/dev/null 2>&1; then apk add --no-cache $need
-  elif command -v dnf >/dev/null 2>&1; then dnf install -y $need
-  elif command -v yum >/dev/null 2>&1; then yum install -y $need
-  else echo "  请自己装：$need"; exit 1; fi
-fi
-echo "  curl / python3 OK"
-
-echo "== 2/5 部署到 /opt/cangchuan =="
+echo "== 3/5 部署到 /opt/cangchuan =="
 mkdir -p /opt/cangchuan
 for f in collect.sh push-ro.sh sec_score.sh; do
   install -m 755 "$SRC/opt/cangchuan/$f" "/opt/cangchuan/$f"
 done
 echo "  3 个脚本已就位（push-ro.sh = 只上报，不接指令）"
 
-echo "== 3/5 写配置 /etc/cangchuan.conf =="
+echo "== 4/5 写配置 /etc/cangchuan.conf =="
 umask 077
 printf 'HUB=%s\nCODE=%s\nMODE=ro\n' "$HUB" "$CODE" > /etc/cangchuan.conf
 chmod 600 /etc/cangchuan.conf
 echo "  面板：$HUB"
 
-echo "== 4/5 装服务（固定 15 秒上报，不接受任何指令）=="
+echo "== 5/5 装服务（固定 15 秒上报，不接受任何指令）=="
 install -m 644 "$SRC/systemd/cangchuan-agent-ro.service" /etc/systemd/system/cangchuan-agent-ro.service
 systemctl daemon-reload
 systemctl disable --now cangchuan-agent.service cangchuan-agent.timer 2>/dev/null >/dev/null || true
 systemctl enable --now cangchuan-agent-ro.service
 echo "  只读服务已开"
 
-echo "== 5/5 立刻上报一次，验证 =="
+echo "== 6/6 立刻上报一次，验证 =="
 /opt/cangchuan/push-ro.sh --once >/dev/null 2>&1 || true
 sleep 2
 if [ -f /opt/cangchuan/self.json ]; then
