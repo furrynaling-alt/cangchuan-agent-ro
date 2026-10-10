@@ -24,7 +24,7 @@ case "$CODE" in
   *"<"*|*">"*|*"节点码"*|abc123xyz|xxx|xxxcode|YOUR_CODE)
     echo "❌ 这不是节点码，看着还是占位符：$CODE"
     echo "   节点码是面板上生成的一串（一台机器一个），整串贴进来、不要带尖括号 <>"
-    echo "   例：... | sudo bash -s JWYRKTSJTZRCUOEFGESGS2LXSJDTQY"
+    echo "   形如：EXAMPLECODE1234567890ABCD（面板给你的那一串，整段贴进来）"
     exit 1;;
 esac
 [ -z "$CODE" ] && { echo "用法：... | sudo bash -s 你的节点码   （去面板生成，不要带 <>）"; exit 1; }
