@@ -44,6 +44,17 @@ else
   done
 fi
 
+# ── 0/5 先验节点码：不在面板白名单里，直接不装（别人拿随便一串装不上）──
+echo "== 0/5 验节点码 =="
+CHK=$(curl -s --max-time 15 -X POST -H "X-Push-Token: $CODE" -d '{}' "$HUB/api/node/check" 2>/dev/null)
+if echo "$CHK" | grep -qE '"ok"[[:space:]]*:[[:space:]]*true'; then
+  echo "  节点码有效 ✓"
+else
+  echo "  ❌ 这个节点码面板不认：$CHK"
+  echo "     —— 节点码要先去面板生成（相当于这台机器的登录密码），不在白名单里的码一律拒收"
+  exit 1
+fi
+
 echo "== 1/5 依赖检查 =="
 need=""
 for c in curl python3; do command -v $c >/dev/null 2>&1 || need="$need $c"; done
