@@ -4,7 +4,7 @@
 #
 #  一条命令：
 #     curl -fsSL https://raw.githubusercontent.com/furrynaling-alt/cangchuan-agent-ro/main/install.sh \
-#       | sudo bash -s <节点码>
+#       | sudo bash -s 你的节点码
 #
 #  ★这个版本只做一件事：每 15 秒采集一次、上报一次。
 #    不轮询指令、不接受任何命令、不被任何模式控制（没有"待机/正常/归家"）。
@@ -19,8 +19,17 @@ set -e
 
 CODE="${1:-}"
 HUB="${2:-https://panel.naling.net}"
+# 防呆：把占位符当真的贴进来会报 "syntax error near unexpected token newline"
+case "$CODE" in
+  *"<"*|*">"*|*"节点码"*|abc123xyz|xxx|xxxcode|YOUR_CODE)
+    echo "❌ 这不是节点码，看着还是占位符：$CODE"
+    echo "   节点码是面板上生成的一串（一台机器一个），整串贴进来、不要带尖括号 <>"
+    echo "   例：... | sudo bash -s JWYRKTSJTZRCUOEFGESGS2LXSJDTQY"
+    exit 1;;
+esac
+[ -z "$CODE" ] && { echo "用法：... | sudo bash -s 你的节点码   （去面板生成，不要带 <>）"; exit 1; }
 RAW="https://raw.githubusercontent.com/furrynaling-alt/cangchuan-agent-ro/main"
-[ -z "$CODE" ] && { echo "用法：... | sudo bash -s <节点码>"; exit 1; }
+[ -z "$CODE" ] && { echo "用法：... | sudo bash -s 你的节点码"; exit 1; }
 
 HERE="$(cd "$(dirname "$0")" 2>/dev/null && pwd || echo /tmp)"
 if [ -f "$HERE/opt/cangchuan/collect.sh" ]; then

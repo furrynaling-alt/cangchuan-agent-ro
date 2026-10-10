@@ -7,10 +7,10 @@
 ## 一条命令安装
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/furrynaling-alt/cangchuan-agent-ro/main/install.sh | sudo bash -s <节点码>
+curl -fsSL https://raw.githubusercontent.com/furrynaling-alt/cangchuan-agent-ro/main/install.sh | sudo bash -s 你的节点码
 ```
-- **节点码**在面板上生成，一台机器一个
-- 想换面板地址：`... | sudo bash -s <节点码> https://panel.naling.net`
+- **节点码**：面板上生成的一串，一台机器一个。**粘贴时不要带尖括号 `<>`**（bash 会把 `<>` 当重定向符号，直接语法报错）
+- 想换面板地址：`... | sudo bash -s 你的节点码 https://panel.naling.net`
 
 ## 装完长什么样
 
