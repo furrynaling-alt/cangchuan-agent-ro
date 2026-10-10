@@ -1,64 +1,60 @@
-# 棂海苍川 · 节点上报【只读定制版】
+# cangchuan-agent-ro · 只上报、不接指令的服务器探针
 
-**只做一件事：每 15 秒采集一次、上报一次。**
-不轮询指令、不接受任何命令、不被任何模式控制（没有"待机/正常/归家"）。
-面板想指挥它也没有通道 —— **它从不问"有没有指令"**。
+> **本仓库只作阅读与思路参考。** 未经书面许可，不得部署、运行、分发或商用 —— 见 [LICENSE](LICENSE)。
 
-## 一条命令安装
+## 这是什么
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/furrynaling-alt/cangchuan-agent-ro/main/install.sh | sudo bash -s 你的节点码
+一个装在服务器上的小探针：**每 15 秒采集一次本机状态（负载/内存/磁盘/流量/在线时长/安全分），POST 到一个中控面板**。
+它比常见的探针多一条自我约束：**只上报，不接收任何指令**。
+
+- 不开任何监听端口（只主动外连 443）
+- 代码里**只有一条** `curl … /api/agent/push`（上行）；**从来没有** `/api/agent/poll`（下行）
+- 所以面板想指挥它也没有通道 —— 不是"权限设了不给"，是**压根没有那条路**
+
+## 设计思路（想自己写探针的，看这一段就够）
+
+我做这个东西踩过的几条线，按重要性排：
+
+**① 安全边界要做成"结构性"的，不要靠配置**
+常见做法是"给它一个账号、权限配小一点"。问题是一旦有人改了配置、或用别的接口绕过去，边界就没了。
+更稳的做法是：**让那条危险的路在代码里不存在**。只上报的机器，就不该有"收指令"的函数 —— 别人想用它执行东西，得先改源码。
+
+**② 认证要真的像"密码"，而不是"编号"**
+许多探针的 token 只检查长度（≥16 位就收）。那它只能区分节点，**证明不了合法性**：
+任何人编一串 16 位的字符就能往你的面板塞假节点。
+要做成真凭据：**面板侧白名单 + 预登记**，没登记过的码一律 403；一台机器一个码，能单独吊销（换码=旧码立刻失效）。
+
+**③ 心跳与上报分开，别一直打扰服务器**
+- 待机（没人看）：只发一个几 KB 的"有人在看吗"心跳
+- 有人看：按面板给的节奏全量上报（5 秒 / 30 秒）
+这样面板页面很"活"，但机器和面板平时几乎不为它花资源。
+**注意**：如果连心跳都不发（真静默），面板就没法叫醒它 —— 打开页面会先看到旧数据。心跳间隔 = 你最多等多久看到新数据。
+
+**④ 数据尽量从本机现成的地方读，不装依赖**
+`/proc/loadavg`、`/proc/meminfo`、`/proc/net/dev`、`df`、`/etc/os-release` —— 全部是系统自带的。探针本身只依赖 `curl` 和 `python3`。
+
+**⑤ 失败要看得见**
+上报失败、码失效、面板连不上 —— 都要能一眼看出来（日志 + `--once` 手动跑一次）。
+
+## 文件
+
 ```
-- **节点码**：面板上生成的一串，一台机器一个。**粘贴时不要带尖括号 `<>`**（bash 会把 `<>` 当重定向符号，直接语法报错）
-- 想换面板地址：`... | sudo bash -s 你的节点码 https://panel.naling.net`
-
-## 装完长什么样
-
-```
-名字 = 本机 hostname（想改：hostnamectl set-hostname 新名字，或面板上改名）
-地区 = 面板按公网 IP 自动判
-数据 = 每 15 秒一次：负载 / 内存 / 磁盘 / 流量 / 运行时长 / 安全分
+install.sh                          一键安装（先查依赖 → 验节点码 → 部署 → 装服务 → 立刻验一次）
+opt/cangchuan/collect.sh            采集 21 项（纯 /proc 与系统命令）
+opt/cangchuan/push-ro.sh            只上报（固定 15 秒）；代码里没有 poll/exec
+opt/cangchuan/sec_score.sh          安全分
+systemd/cangchuan-agent-ro.service  常驻服务（Restart=always，MemoryMax=28M）
 ```
 
-## 和完整版的区别（一句话）
+## 如果你要用这套东西
 
-| | 只读定制版（本仓库） | 完整版 |
-|---|---|---|
-| 上报数据 | ✅ 固定 15 秒 | ✅ 按面板给的节奏（5s/30s/待机） |
-| 收指令执行 | ❌ **完全没有这个通道** | ✅ 会轮询 `/api/agent/poll` |
-| 适用 | 不想让任何人远程动它的机器 | 自己的机器，需要远程执行 |
+**请不要直接部署本仓库**（见 LICENSE）。它公开的目的是让你看清**思路和边界怎么划**：
+照着上面五条，自己写一个 —— 会比拿来用更贴合你自己的场景。
 
-**只读版的安全边界是"结构性的"**：它代码里只有一条 `curl … /api/agent/push`（上行），
-从来没有 `/api/agent/poll`（下行）—— 不是"权限设了不给"，是**压根没有那条路**。
-
-## 包里有什么
-
-```
-install.sh                             一键装（下载组件 → 写配置 → 装服务 → 验一次）
-opt/cangchuan/collect.sh               采集 21 项
-opt/cangchuan/push-ro.sh               只上报（固定 15 秒）；代码里没有 poll/exec
-opt/cangchuan/sec_score.sh             安全分
-systemd/cangchuan-agent-ro.service     常驻服务（Restart=always，MemoryMax=28M）
-```
-
-## 端口 / 权限
-
-- **不开任何监听端口**，全是主动外连 443 → 面板
-- 凭据只在 `/etc/cangchuan.conf`（600，仅 root 可读）
-
-## 卸载
+## 卸载（如果你已经在自己的环境里跑过类似的）
 
 ```bash
 systemctl disable --now cangchuan-agent-ro
 rm -f /etc/systemd/system/cangchuan-agent-ro.service /etc/cangchuan.conf
 rm -rf /opt/cangchuan
-```
-
-## 排查
-
-```bash
-systemctl status cangchuan-agent-ro
-journalctl -u cangchuan-agent-ro -n 30
-/opt/cangchuan/push-ro.sh --once     # 手动跑一次
-cat /opt/cangchuan/self.json         # 采到的原始数据
 ```
